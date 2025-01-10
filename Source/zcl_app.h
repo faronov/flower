@@ -17,6 +17,9 @@ extern "C" {
 // Application Events
 #define APP_REPORT_EVT                  0x0001
 #define APP_READ_SENSORS_EVT            0x0002
+#define APP_IDENTIFY_EVT  0x0001
+#define APP_BIND_EVT      0x0002
+#define APP_UNBIND_EVT    0x0004
 
 #define AIR_COMPENSATION_FORMULA(ADC)   ((0.179 * (double)ADC + 3926.0))
 #define WATER_COMPENSATION_FORMULA(ADC) ((0.146 * (double)ADC + 2020.0))
@@ -87,6 +90,8 @@ extern bool hasBME280;
 /**************************************************************
  * FUNCTIONS
  **************************************************************/
+extern void zclApp_Report(void);
+extern void zclApp_ReadSensors(void);
 extern void detectSensors(void);
 extern void configureSensorAttributes(void);
 extern void configureBatteryAttributes(void);
