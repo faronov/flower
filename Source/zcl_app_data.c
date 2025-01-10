@@ -25,7 +25,7 @@ uint16 zclIdentifyTime = 0;
 // Обнаружение подключенных сенсоров
 void detectSensors(void) {
     // Проверяем наличие DS18B20
-    if (DS18B20_Init() == SUCCESS) {
+    if (ds18b20_isPresent() == SUCCESS) {
         hasDS18B20 = true;
         LREP("DS18B20 detected\r\n");
     } else {
