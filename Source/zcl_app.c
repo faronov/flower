@@ -14,10 +14,44 @@
 
 byte zclApp_TaskID;
 
+// Глобальные переменные для хранения данных Bind
+uint16 manualBindDstAddr;
+uint8 manualBindDstEndpoint;
+uint16 manualBindClusterId;
+
 // Функция для обновления значений кластеров
 static void updateClusterValue(uint8 endpoint, uint16 clusterId, uint16 attrId, int16 value) {
     bdb_RepChangedAttrValue(endpoint, clusterId, attrId);
     LREP("Cluster 0x%X Attribute 0x%X Updated: %d\r\n", clusterId, attrId, value);
+}
+
+// Функция для создания Bind с другим устройством
+static void zclApp_ManualBind(uint16 dstAddr, uint8 dstEndpoint, uint16 clusterId) {
+    bindReq_t bindReq;
+    osal_memset(&bindReq, 0, sizeof(bindReq));
+
+    // Настройка источника Bind
+    bindReq.srcAddr = NLME_GetShortAddr();  // Короткий адрес источника
+    osal_cpyExtAddr(bindReq.srcIEEE, NLME_GetExtAddr());  // IEEE адрес источника
+    bindReq.srcEP = zclApp_FirstEP.EndPoint;  // Endpoint источника
+    bindReq.clusterId = clusterId;
+
+    // Настройка назначения Bind
+    bindReq.dstAddr.addrMode = Addr16Bit;  // Используем 16-битный адрес
+    bindReq.dstAddr.addr.shortAddr = dstAddr;  // Адрес назначения
+    bindReq.dstEP = dstEndpoint;  // Endpoint назначения
+
+    // Добавление Bind через Zigbee API
+    if (bdb_AddBindEntry(&bindReq) == SUCCESS) {
+        LREP("Bind successful: Cluster 0x%X bound to device 0x%X, endpoint %d\r\n", clusterId, dstAddr, dstEndpoint);
+    } else {
+        LREP("Bind failed: Cluster 0x%X to device 0x%X, endpoint %d\r\n", clusterId, dstAddr, dstEndpoint);
+    }
+}
+
+// Обработка ручного Bind через событие
+static void zclApp_HandleManualBindRequest(void) {
+    zclApp_ManualBind(manualBindDstAddr, manualBindDstEndpoint, manualBindClusterId);
 }
 
 // Чтение данных с сенсоров
@@ -106,6 +140,11 @@ uint16 zclApp_event_loop(uint8 task_id, uint16 events) {
         return (events ^ APP_IDENTIFY_EVT);
     }
 
+    if (events & APP_MANUAL_BIND_EVT) {
+        zclApp_HandleManualBindRequest();
+        return (events ^ APP_MANUAL_BIND_EVT);
+    }
+
     if (events & BDB_BIND_NOTIFICATION_EVT) {
         // Обработайте успешный Bind
         LREP("Bind notification received\r\n");
@@ -125,12 +164,17 @@ void zclApp_Init(byte task_id) {
                          zclApp_AttrsFirstEP);
     bdb_RegisterSimpleDescriptor(&zclApp_FirstEP);
 
-    // Регистрация Bind для кластеров
-    bdb_BindIfClustersMatch(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_GEN_POWER_CFG);
-    bdb_BindIfClustersMatch(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_MS_TEMPERATURE_MEASUREMENT);
-    bdb_BindIfClustersMatch(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_MS_RELATIVE_HUMIDITY);
-
     registerBatteryReporting();
 
     osal_start_reload_timer(zclApp_TaskID, APP_REPORT_EVT, APP_REPORT_DELAY);
+}
+
+// Функция для триггера Bind (инициируется пользователем)
+void triggerManualBind(uint16 dstAddr, uint8 dstEndpoint, uint16 clusterId) {
+    manualBindDstAddr = dstAddr;
+    manualBindDstEndpoint = dstEndpoint;
+    manualBindClusterId = clusterId;
+
+    // Устанавливаем событие для обработки Bind
+    osal_set_event(zclApp_TaskID, APP_MANUAL_BIND_EVT);
 }
