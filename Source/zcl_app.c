@@ -10,6 +10,7 @@
 #include "hal_adc.h"
 #include "bme280.h"
 #include "ds18b20.h"
+#include "ZDObject.h"
 
 byte zclApp_TaskID;
 
