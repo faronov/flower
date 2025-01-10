@@ -14,10 +14,10 @@
 
 byte zclApp_TaskID;
 
-// Глобальные переменные для хранения данных Bind
-uint16 manualBindDstAddr;
-uint8 manualBindDstEndpoint;
-uint16 manualBindClusterId;
+// Глобальные переменные для хранения данных Bind/Unbind
+uint16 dynamicDstAddr;
+uint8 dynamicDstEndpoint;
+uint16 dynamicClusterId;
 
 // Функция для обновления значений кластеров
 static void updateClusterValue(uint8 endpoint, uint16 clusterId, uint16 attrId, int16 value) {
@@ -25,101 +25,51 @@ static void updateClusterValue(uint8 endpoint, uint16 clusterId, uint16 attrId, 
     LREP("Cluster 0x%X Attribute 0x%X Updated: %d\r\n", clusterId, attrId, value);
 }
 
-// Функция для создания Bind с другим устройством
-static void zclApp_ManualBind(uint16 dstAddr, uint8 dstEndpoint, uint16 clusterId) {
-    bindReq_t bindReq;
+// Функция для создания Bind через Zigbee API
+void zclApp_ZigbeeBind(uint16 dstAddr, uint8 dstEndpoint, uint16 clusterId) {
+    ZDO_BindReq_t bindReq;
     osal_memset(&bindReq, 0, sizeof(bindReq));
 
-    // Настройка источника Bind
+    // Настройка источника
     bindReq.srcAddr = NLME_GetShortAddr();  // Короткий адрес источника
-    osal_cpyExtAddr(bindReq.srcIEEE, NLME_GetExtAddr());  // IEEE адрес источника
+    osal_cpyExtAddr(bindReq.srcExtAddr, NLME_GetExtAddr());  // IEEE адрес источника
     bindReq.srcEP = zclApp_FirstEP.EndPoint;  // Endpoint источника
     bindReq.clusterId = clusterId;
 
-    // Настройка назначения Bind
+    // Настройка назначения
     bindReq.dstAddr.addrMode = Addr16Bit;  // Используем 16-битный адрес
     bindReq.dstAddr.addr.shortAddr = dstAddr;  // Адрес назначения
     bindReq.dstEP = dstEndpoint;  // Endpoint назначения
 
-    // Добавление Bind через Zigbee API
-    if (bdb_AddBindEntry(&bindReq) == SUCCESS) {
-        LREP("Bind successful: Cluster 0x%X bound to device 0x%X, endpoint %d\r\n", clusterId, dstAddr, dstEndpoint);
+    // Отправка команды Bind
+    if (ZDO_BindReq(&bindReq) == ZSuccess) {
+        LREP("Zigbee Bind successful: Cluster 0x%X to device 0x%X, endpoint %d\r\n", clusterId, dstAddr, dstEndpoint);
     } else {
-        LREP("Bind failed: Cluster 0x%X to device 0x%X, endpoint %d\r\n", clusterId, dstAddr, dstEndpoint);
+        LREP("Zigbee Bind failed: Cluster 0x%X to device 0x%X, endpoint %d\r\n", clusterId, dstAddr, dstEndpoint);
     }
 }
 
-// Обработка ручного Bind через событие
-static void zclApp_HandleManualBindRequest(void) {
-    zclApp_ManualBind(manualBindDstAddr, manualBindDstEndpoint, manualBindClusterId);
-}
+// Функция для удаления Bind через Zigbee API
+void zclApp_ZigbeeUnbind(uint16 dstAddr, uint8 dstEndpoint, uint16 clusterId) {
+    ZDO_BindReq_t unbindReq;
+    osal_memset(&unbindReq, 0, sizeof(unbindReq));
 
-// Чтение данных с сенсоров
-static void zclApp_ReadSensors(void) {
-    zclApp_ReadDS18B20();
-    zclApp_ReadBME280();
-    zclApp_ReadIlluminance();
-    zclApp_ReadSoilHumidity();
+    // Настройка источника
+    unbindReq.srcAddr = NLME_GetShortAddr();  // Короткий адрес источника
+    osal_cpyExtAddr(unbindReq.srcExtAddr, NLME_GetExtAddr());  // IEEE адрес источника
+    unbindReq.srcEP = zclApp_FirstEP.EndPoint;  // Endpoint источника
+    unbindReq.clusterId = clusterId;
 
-    // Обновление данных батареи
-    updateBatteryAttributes();
-}
+    // Настройка назначения
+    unbindReq.dstAddr.addrMode = Addr16Bit;  // Используем 16-битный адрес
+    unbindReq.dstAddr.addr.shortAddr = dstAddr;  // Адрес назначения
+    unbindReq.dstEP = dstEndpoint;  // Endpoint назначения
 
-// Чтение температуры с DS18B20
-static void zclApp_ReadDS18B20(void) {
-    int16 temp = readTemperature();
-    if (temp != -1) {
-        zclApp_DS18B20_MeasuredValue = temp;
-        updateClusterValue(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_MS_TEMPERATURE_MEASUREMENT, ATTRID_MS_TEMPERATURE_MEASURED_VALUE, temp);
+    // Отправка команды Unbind
+    if (ZDO_UnbindReq(&unbindReq) == ZSuccess) {
+        LREP("Zigbee Unbind successful: Cluster 0x%X from device 0x%X, endpoint %d\r\n", clusterId, dstAddr, dstEndpoint);
     } else {
-        LREP("DS18B20 Read Error\r\n");
-    }
-}
-
-// Чтение данных с BME280
-static void zclApp_ReadBME280(void) {
-    struct bme280_data data;
-    int8_t rslt = bme280_get_sensor_data(BME280_ALL, &data, &bme280_dev);
-    if (rslt == BME280_OK) {
-        zclApp_Temperature_Sensor_MeasuredValue = data.temperature;
-        zclApp_HumiditySensor_MeasuredValue = data.humidity;
-        zclApp_PressureSensor_MeasuredValue = data.pressure;
-        updateClusterValue(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_MS_TEMPERATURE_MEASUREMENT, ATTRID_MS_TEMPERATURE_MEASURED_VALUE, data.temperature);
-        updateClusterValue(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_MS_RELATIVE_HUMIDITY, ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE, data.humidity);
-        updateClusterValue(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_MS_PRESSURE_MEASUREMENT, ATTRID_MS_PRESSURE_MEASUREMENT_MEASURED_VALUE, data.pressure);
-    } else {
-        LREP("BME280 Read Error\r\n");
-    }
-}
-
-// Чтение освещенности
-static void zclApp_ReadIlluminance(void) {
-    uint16 adcValue = halAdcRead(HAL_ADC_CHANNEL_6, HAL_ADC_RESOLUTION_12);
-    zclApp_IlluminanceSensor_MeasuredValue = (uint16)(adcValue * 0.2);
-    updateClusterValue(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_MS_ILLUMINANCE_MEASUREMENT, ATTRID_MS_ILLUMINANCE_MEASURED_VALUE, zclApp_IlluminanceSensor_MeasuredValue);
-}
-
-// Чтение влажности почвы
-static void zclApp_ReadSoilHumidity(void) {
-    uint16 adcValue = halAdcRead(HAL_ADC_CHANNEL_5, HAL_ADC_RESOLUTION_14);
-    uint16 minAir = 300;
-    uint16 maxWater = 700;
-    zclApp_SoilHumiditySensor_MeasuredValue = (adcValue - minAir) * 10000 / (maxWater - minAir);
-    updateClusterValue(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_MS_RELATIVE_HUMIDITY, ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE, zclApp_SoilHumiditySensor_MeasuredValue);
-}
-
-// Генерация отчётов
-static void zclApp_Report(void) {
-    bdb_RepChangedAttrValue(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_MS_TEMPERATURE_MEASUREMENT, ATTRID_MS_TEMPERATURE_MEASURED_VALUE);
-}
-
-// Обработка команды Identify
-static void zclApp_IdentifyCB(zclIdentify_t *pCmd) {
-    LREP("Identify: Time=%d\r\n", pCmd->identifyTime);
-
-    for (uint16 i = 0; i < pCmd->identifyTime; i++) {
-        LED_On();
-        osal_start_timerEx(zclApp_TaskID, APP_IDENTIFY_EVT, 500); // Таймер для выключения LED
+        LREP("Zigbee Unbind failed: Cluster 0x%X from device 0x%X, endpoint %d\r\n", clusterId, dstAddr, dstEndpoint);
     }
 }
 
@@ -140,15 +90,14 @@ uint16 zclApp_event_loop(uint8 task_id, uint16 events) {
         return (events ^ APP_IDENTIFY_EVT);
     }
 
-    if (events & APP_MANUAL_BIND_EVT) {
-        zclApp_HandleManualBindRequest();
-        return (events ^ APP_MANUAL_BIND_EVT);
+    if (events & APP_BIND_EVT) {
+        zclApp_ZigbeeBind(dynamicDstAddr, dynamicDstEndpoint, dynamicClusterId);
+        return (events ^ APP_BIND_EVT);
     }
 
-    if (events & BDB_BIND_NOTIFICATION_EVT) {
-        // Обработайте успешный Bind
-        LREP("Bind notification received\r\n");
-        return (events ^ BDB_BIND_NOTIFICATION_EVT);
+    if (events & APP_UNBIND_EVT) {
+        zclApp_ZigbeeUnbind(dynamicDstAddr, dynamicDstEndpoint, dynamicClusterId);
+        return (events ^ APP_UNBIND_EVT);
     }
 
     return 0;
@@ -169,12 +118,9 @@ void zclApp_Init(byte task_id) {
     osal_start_reload_timer(zclApp_TaskID, APP_REPORT_EVT, APP_REPORT_DELAY);
 }
 
-// Функция для триггера Bind (инициируется пользователем)
-void triggerManualBind(uint16 dstAddr, uint8 dstEndpoint, uint16 clusterId) {
-    manualBindDstAddr = dstAddr;
-    manualBindDstEndpoint = dstEndpoint;
-    manualBindClusterId = clusterId;
-
-    // Устанавливаем событие для обработки Bind
-    osal_set_event(zclApp_TaskID, APP_MANUAL_BIND_EVT);
+// Установка динамических параметров для Bind/Unbind
+void setDynamicBindParameters(uint16 dstAddr, uint8 dstEndpoint, uint16 clusterId) {
+    dynamicDstAddr = dstAddr;
+    dynamicDstEndpoint = dstEndpoint;
+    dynamicClusterId = clusterId;
 }
