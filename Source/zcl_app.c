@@ -25,51 +25,31 @@ static void updateClusterValue(uint8 endpoint, uint16 clusterId, uint16 attrId, 
     LREP("Cluster 0x%X Attribute 0x%X Updated: %d\r\n", clusterId, attrId, value);
 }
 
-// Функция для создания Bind через Zigbee API
-void zclApp_ZigbeeBind(uint16 dstAddr, uint8 dstEndpoint, uint16 clusterId) {
-    ZDO_BindReq_t bindReq;
-    osal_memset(&bindReq, 0, sizeof(bindReq));
+// Функция для обработки Bind/Unbind через Zigbee API
+static void handleBindUnbind(uint16 dstAddr, uint8 dstEndpoint, uint16 clusterId, bool isBind) {
+    ZDO_BindReq_t req;
+    osal_memset(&req, 0, sizeof(req));
 
     // Настройка источника
-    bindReq.srcAddr = NLME_GetShortAddr();  // Короткий адрес источника
-    osal_cpyExtAddr(bindReq.srcExtAddr, NLME_GetExtAddr());  // IEEE адрес источника
-    bindReq.srcEP = zclApp_FirstEP.EndPoint;  // Endpoint источника
-    bindReq.clusterId = clusterId;
+    req.srcAddr = NLME_GetShortAddr();  // Короткий адрес источника
+    osal_cpyExtAddr(req.srcExtAddr, NLME_GetExtAddr());  // IEEE адрес источника
+    req.srcEP = zclApp_FirstEP.EndPoint;  // Endpoint источника
+    req.clusterId = clusterId;
 
     // Настройка назначения
-    bindReq.dstAddr.addrMode = Addr16Bit;  // Используем 16-битный адрес
-    bindReq.dstAddr.addr.shortAddr = dstAddr;  // Адрес назначения
-    bindReq.dstEP = dstEndpoint;  // Endpoint назначения
+    req.dstAddr.addrMode = Addr16Bit;  // Используем 16-битный адрес
+    req.dstAddr.addr.shortAddr = dstAddr;  // Адрес назначения
+    req.dstEP = dstEndpoint;  // Endpoint назначения
 
-    // Отправка команды Bind
-    if (ZDO_BindReq(&bindReq) == ZSuccess) {
-        LREP("Zigbee Bind successful: Cluster 0x%X to device 0x%X, endpoint %d\r\n", clusterId, dstAddr, dstEndpoint);
+    // Вызов Bind или Unbind
+    ZStatus_t status = isBind ? ZDO_BindReq(&req) : ZDO_UnbindReq(&req);
+
+    if (status == ZSuccess) {
+        LREP("%s successful: Cluster 0x%X to device 0x%X, endpoint %d\r\n",
+             isBind ? "Bind" : "Unbind", clusterId, dstAddr, dstEndpoint);
     } else {
-        LREP("Zigbee Bind failed: Cluster 0x%X to device 0x%X, endpoint %d\r\n", clusterId, dstAddr, dstEndpoint);
-    }
-}
-
-// Функция для удаления Bind через Zigbee API
-void zclApp_ZigbeeUnbind(uint16 dstAddr, uint8 dstEndpoint, uint16 clusterId) {
-    ZDO_BindReq_t unbindReq;
-    osal_memset(&unbindReq, 0, sizeof(unbindReq));
-
-    // Настройка источника
-    unbindReq.srcAddr = NLME_GetShortAddr();  // Короткий адрес источника
-    osal_cpyExtAddr(unbindReq.srcExtAddr, NLME_GetExtAddr());  // IEEE адрес источника
-    unbindReq.srcEP = zclApp_FirstEP.EndPoint;  // Endpoint источника
-    unbindReq.clusterId = clusterId;
-
-    // Настройка назначения
-    unbindReq.dstAddr.addrMode = Addr16Bit;  // Используем 16-битный адрес
-    unbindReq.dstAddr.addr.shortAddr = dstAddr;  // Адрес назначения
-    unbindReq.dstEP = dstEndpoint;  // Endpoint назначения
-
-    // Отправка команды Unbind
-    if (ZDO_UnbindReq(&unbindReq) == ZSuccess) {
-        LREP("Zigbee Unbind successful: Cluster 0x%X from device 0x%X, endpoint %d\r\n", clusterId, dstAddr, dstEndpoint);
-    } else {
-        LREP("Zigbee Unbind failed: Cluster 0x%X from device 0x%X, endpoint %d\r\n", clusterId, dstAddr, dstEndpoint);
+        LREP("%s failed: Cluster 0x%X to device 0x%X, endpoint %d\r\n",
+             isBind ? "Bind" : "Unbind", clusterId, dstAddr, dstEndpoint);
     }
 }
 
@@ -91,12 +71,12 @@ uint16 zclApp_event_loop(uint8 task_id, uint16 events) {
     }
 
     if (events & APP_BIND_EVT) {
-        zclApp_ZigbeeBind(dynamicDstAddr, dynamicDstEndpoint, dynamicClusterId);
+        handleBindUnbind(dynamicDstAddr, dynamicDstEndpoint, dynamicClusterId, true);
         return (events ^ APP_BIND_EVT);
     }
 
     if (events & APP_UNBIND_EVT) {
-        zclApp_ZigbeeUnbind(dynamicDstAddr, dynamicDstEndpoint, dynamicClusterId);
+        handleBindUnbind(dynamicDstAddr, dynamicDstEndpoint, dynamicClusterId, false);
         return (events ^ APP_UNBIND_EVT);
     }
 
@@ -123,4 +103,5 @@ void setDynamicBindParameters(uint16 dstAddr, uint8 dstEndpoint, uint16 clusterI
     dynamicDstAddr = dstAddr;
     dynamicDstEndpoint = dstEndpoint;
     dynamicClusterId = clusterId;
+    LREP("Dynamic Bind Parameters Set: Addr=0x%X, EP=%d, Cluster=0x%X\r\n", dstAddr, dstEndpoint, clusterId);
 }
