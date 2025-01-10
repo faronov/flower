@@ -93,6 +93,9 @@ extern void configureBatteryAttributes(void);
 extern void configureIdentifyAttributes(void);
 extern void registerReporting(void);
 extern void configureDynamicAttributes(void);
+extern int DS18B20_Init(uint8_t pin); // Пример прототипа для DS18B20
+extern void zcl_registerReportableAttribute(uint8 endpoint, uint16 clusterId, uint16 attrId, uint16 minReportInt, uint16 maxReportInt, uint8 reportableChange);
+
 void zclApp_InitClusters(void);
 void zclApp_BindClusters(void);
 
