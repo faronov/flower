@@ -106,6 +106,12 @@ uint16 zclApp_event_loop(uint8 task_id, uint16 events) {
         return (events ^ APP_IDENTIFY_EVT);
     }
 
+    if (events & BDB_BIND_NOTIFICATION_EVT) {
+        // Обработайте успешный Bind
+        LREP("Bind notification received\r\n");
+        return (events ^ BDB_BIND_NOTIFICATION_EVT);
+    }
+
     return 0;
 }
 
@@ -118,6 +124,11 @@ void zclApp_Init(byte task_id) {
                          sizeof(zclApp_AttrsFirstEP) / sizeof(zclAttrRec_t),
                          zclApp_AttrsFirstEP);
     bdb_RegisterSimpleDescriptor(&zclApp_FirstEP);
+
+    // Регистрация Bind для кластеров
+    bdb_BindIfClustersMatch(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_GEN_POWER_CFG);
+    bdb_BindIfClustersMatch(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_MS_TEMPERATURE_MEASUREMENT);
+    bdb_BindIfClustersMatch(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_MS_RELATIVE_HUMIDITY);
 
     registerBatteryReporting();
 
