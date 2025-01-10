@@ -82,7 +82,12 @@ extern bool hasBME280;
 /**************************************************************
  * FUNCTIONS
  **************************************************************/
-
+extern void detectSensors(void);
+extern void configureSensorAttributes(void);
+extern void configureBatteryAttributes(void);
+extern void configureIdentifyAttributes(void);
+extern void registerReporting(void);
+extern void configureDynamicAttributes(void);
 void zclApp_InitClusters(void);
 void zclApp_BindClusters(void);
 
