@@ -7,7 +7,6 @@
 #include "bdb.h"
 #include "commissioning.h"
 #include "factory_reset.h"
-#include "led_control.h"
 #include "hal_adc.h"
 #include "bme280.h"
 #include "ds18b20.h"
