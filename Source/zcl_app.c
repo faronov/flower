@@ -33,7 +33,7 @@
 #include "hal_i2c.h"
 #include "hal_key.h"
 #include "hal_led.h"
-
+#include "led_control.h"
 #include "battery.h"
 #include "commissioning.h"
 #include "factory_reset.h"
@@ -132,6 +132,7 @@ void zclApp_Init(byte task_id) {
     POWER_OFF_SENSORS();
 
     HalI2CInit();
+    LED_Init();
     zclApp_InitPWM();
     // this is important to allow connects throught routers
     // to make this work, coordinator should be compiled with this flag #define TP2_LEGACY_ZC
@@ -180,7 +181,18 @@ uint16 zclApp_event_loop(uint8 task_id, uint16 events) {
         // return unprocessed events
         return (events ^ SYS_EVENT_MSG);
     }
+    if (events & LED_SIGNAL_EVT)
+    {
+        LED_Signal(0, 0, 0, 0); // Обновить состояние мигания
+        return events ^ LED_SIGNAL_EVT;
+    }
 
+    if (events & LED_REPEAT_EVT)
+    {
+        LED_Signal(0, 0, 0, 0); // Повтор цикла мигания
+        return events ^ LED_REPEAT_EVT;
+    }
+    
     if (events & APP_REPORT_EVT) {
         LREPMaster("APP_REPORT_EVT\r\n");
         zclApp_Report();
