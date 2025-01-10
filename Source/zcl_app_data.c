@@ -5,6 +5,7 @@
 #include "hal_adc.h"
 #include "bme280.h"
 #include "ds18b20.h"
+#include "Debug.h"
 
 // Глобальные переменные для динамических атрибутов
 zclAttrRec_t dynamicAttrList[20];
