@@ -15,8 +15,8 @@
 
 byte zclApp_TaskID;
 
-uint8 zclApp_BatteryVoltage = 0;                // Напряжение батареи
-uint8 zclApp_BatteryPercentageRemaining = 0;   // Остаток заряда батареи в %
+uint8 zclBattery_Voltage = 0;                // Напряжение батареи (0.1 Вольт)
+uint8 zclBattery_PercentageRemaining = 0;   // Остаток заряда в %
 
 // Функция для обновления значений кластеров
 static void updateClusterValue(uint8 endpoint, uint16 clusterId, uint16 attrId, int16 value) {
@@ -24,14 +24,41 @@ static void updateClusterValue(uint8 endpoint, uint16 clusterId, uint16 attrId, 
     LREP("Cluster 0x%X Attribute 0x%X Updated: %d\r\n", clusterId, attrId, value);
 }
 
-// Обновление данных о батарее
-static void zclApp_UpdateBatteryAttributes(void) {
-    uint16 batteryVoltageRaw = readBatteryVoltage(); // Функция, возвращающая напряжение батареи в милливольтах
-    zclApp_BatteryVoltage = batteryVoltageRaw / 100; // Конвертация в десятые доли вольта
-    zclApp_BatteryPercentageRemaining = calculateBatteryPercentage(batteryVoltageRaw);
+// Чтение напряжения батареи
+uint16 readBatteryVoltage(void) {
+    uint16 adcValue = halAdcRead(HAL_ADC_CHANNEL_VDD, HAL_ADC_RESOLUTION_14);
+    return (adcValue * 1250) / 4096; // Конвертация в милливольты
+}
 
-    updateClusterValue(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_GEN_POWER_CFG, ATTRID_POWER_CFG_BATTERY_VOLTAGE, zclApp_BatteryVoltage);
-    updateClusterValue(zclApp_FirstEP.EndPoint, ZCL_CLUSTER_ID_GEN_POWER_CFG, ATTRID_POWER_CFG_BATTERY_PERCENTAGE_REMAINING, zclApp_BatteryPercentageRemaining);
+// Вычисление процента заряда батареи
+uint8 calculateBatteryPercentage(uint16 voltage) {
+    const uint16 MIN_VOLTAGE = 2000; // 2.0 В (разряженная батарея)
+    const uint16 MAX_VOLTAGE = 3000; // 3.0 В (полностью заряженная батарея)
+
+    if (voltage <= MIN_VOLTAGE) {
+        return 0; // Полностью разряжено
+    } else if (voltage >= MAX_VOLTAGE) {
+        return 100; // Полностью заряжено
+    } else {
+        // Пропорциональный расчет
+        return (uint8)((voltage - MIN_VOLTAGE) * 100 / (MAX_VOLTAGE - MIN_VOLTAGE));
+    }
+}
+
+// Обновление данных о батарее
+static void updateBatteryAttributes(void) {
+    uint16 voltage = readBatteryVoltage(); // Напряжение в мВ
+    zclBattery_Voltage = voltage / 100;   // Конвертация в 0.1 Вольта
+    zclBattery_PercentageRemaining = calculateBatteryPercentage(voltage);
+
+    bdb_RepChangedAttrValue(1, ZCL_CLUSTER_ID_GEN_POWER_CFG, ATTRID_POWER_CFG_BATTERY_VOLTAGE);
+    bdb_RepChangedAttrValue(1, ZCL_CLUSTER_ID_GEN_POWER_CFG, ATTRID_POWER_CFG_BATTERY_PERCENTAGE_REMAINING);
+}
+
+// Регистрация репортинга батареи
+static void registerBatteryReporting(void) {
+    zcl_registerReportableAttribute(1, ZCL_CLUSTER_ID_GEN_POWER_CFG, ATTRID_POWER_CFG_BATTERY_VOLTAGE, 30, 3600, 1);
+    zcl_registerReportableAttribute(1, ZCL_CLUSTER_ID_GEN_POWER_CFG, ATTRID_POWER_CFG_BATTERY_PERCENTAGE_REMAINING, 30, 3600, 1);
 }
 
 // Инициализация задачи
@@ -44,18 +71,10 @@ void zclApp_Init(byte task_id) {
                          zclApp_AttrsFirstEP);
     bdb_RegisterSimpleDescriptor(&zclApp_FirstEP);
 
-    // Регистрация репортинга для всех кластеров
-    zcl_registerReportableAttribute(1, ZCL_CLUSTER_ID_GEN_POWER_CFG, ATTRID_POWER_CFG_BATTERY_VOLTAGE, 30, 3600, 1);
-    zcl_registerReportableAttribute(1, ZCL_CLUSTER_ID_GEN_POWER_CFG, ATTRID_POWER_CFG_BATTERY_PERCENTAGE_REMAINING, 30, 3600, 1);
-    zcl_registerReportableAttribute(1, ZCL_CLUSTER_ID_MS_TEMPERATURE_MEASUREMENT, ATTRID_MS_TEMPERATURE_MEASURED_VALUE, 30, 3600, 50);
-    zcl_registerReportableAttribute(1, ZCL_CLUSTER_ID_MS_RELATIVE_HUMIDITY, ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE, 30, 3600, 200);
-    zcl_registerReportableAttribute(1, ZCL_CLUSTER_ID_MS_PRESSURE_MEASUREMENT, ATTRID_MS_PRESSURE_MEASUREMENT_MEASURED_VALUE, 30, 3600, 50);
-    zcl_registerReportableAttribute(1, ZCL_CLUSTER_ID_MS_ILLUMINANCE_MEASUREMENT, ATTRID_MS_ILLUMINANCE_MEASURED_VALUE, 30, 3600, 100);
+    registerBatteryReporting();
 
-    // Установка таймера для периодического отчёта
     osal_start_reload_timer(zclApp_TaskID, APP_REPORT_EVT, APP_REPORT_DELAY);
 }
-
 
 // Основной цикл обработки событий
 uint16 zclApp_event_loop(uint8 task_id, uint16 events) {
@@ -93,7 +112,9 @@ static void zclApp_ReadSensors(void) {
     zclApp_ReadBME280();
     zclApp_ReadIlluminance();
     zclApp_ReadSoilHumidity();
-    zclApp_UpdateBatteryAttributes(); // Обновление данных батареи
+
+    // Обновление данных батареи
+    updateBatteryAttributes();
 }
 
 // Чтение температуры с DS18B20
