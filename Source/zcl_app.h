@@ -5,36 +5,27 @@
 extern "C" {
 #endif
 
-/*********************************************************************
+/**************************************************************
  * INCLUDES
- */
+ **************************************************************/
 #include "version.h"
 #include "zcl.h"
 
-
-/*********************************************************************
+/**************************************************************
  * CONSTANTS
- */
-
+ **************************************************************/
 // Application Events
 #define APP_REPORT_EVT                  0x0001
 #define APP_READ_SENSORS_EVT            0x0002
 
-
-
-
 #define AIR_COMPENSATION_FORMULA(ADC)   ((0.179 * (double)ADC + 3926.0))
 #define WATER_COMPENSATION_FORMULA(ADC) ((0.146 * (double)ADC + 2020.0))
 
+#define APP_REPORT_DELAY ((uint32) 1800000) // 30 minutes
 
-
-#define APP_REPORT_DELAY ((uint32) 1800000) //30 minutes
-
-
-/*********************************************************************
+/**************************************************************
  * MACROS
- */
-
+ **************************************************************/
 #define R           ACCESS_CONTROL_READ
 #define RR          (R | ACCESS_REPORTABLE)
 
@@ -52,20 +43,12 @@ extern "C" {
 #define ZCL_INT16   ZCL_DATATYPE_INT16
 #define ZCL_INT8    ZCL_DATATYPE_INT8
 
-
 #define ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE_RAW_ADC              0x0200
 #define ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE_BATTERY_RAW_ADC      0x0201
 
-
-
-/*********************************************************************
- * TYPEDEFS
- */
-
-/*********************************************************************
+/**************************************************************
  * VARIABLES
- */
-
+ **************************************************************/
 extern SimpleDescriptionFormat_t zclApp_FirstEP;
 extern SimpleDescriptionFormat_t zclApp_SecondEP;
 
@@ -89,16 +72,19 @@ extern CONST zclAttrRec_t zclApp_AttrsSecondEP[];
 extern CONST uint8 zclApp_AttrsSecondEPCount;
 extern CONST uint8 zclApp_AttrsFirstEPCount;
 
-
 extern const uint8 zclApp_ManufacturerName[];
 extern const uint8 zclApp_ModelId[];
 extern const uint8 zclApp_PowerSource;
 
-// APP_TODO: Declare application specific attributes here
+extern bool hasDS18B20;
+extern bool hasBME280;
 
-/*********************************************************************
+/**************************************************************
  * FUNCTIONS
- */
+ **************************************************************/
+
+void zclApp_InitClusters(void);
+void zclApp_BindClusters(void);
 
 /*
  * Initialization for the task
