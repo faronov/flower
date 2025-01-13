@@ -17,6 +17,7 @@ env:
   PROJECT: flower
   CONFIGURATION: DIYRuZ_Flower
   SUBMODULES: 1
+  DEFINES: '--define "HAL_PA_LNA" --define "MAC_RUNTIME_CC2592" --define "DEBUG_MODE=1"'
 
 jobs:
   build:
@@ -154,7 +155,7 @@ jobs:
       - name: Build firmware
         id: firmware
         run: |
-          embedded_workbench/common/bin/IarBuild.exe zstack/Projects/zstack/HomeAutomation/${{ env.PROJECT }}/CC2530DB/GenericApp.ewp -build ${{ env.CONFIGURATION }} -log all
+          embedded_workbench/common/bin/IarBuild.exe zstack/Projects/zstack/HomeAutomation/${{ env.PROJECT }}/CC2530DB/GenericApp.ewp -build ${{ env.CONFIGURATION }} ${{ env.DEFINES }} -log all
           echo "status=success" >> $GITHUB_OUTPUT
         shell: bash
 
